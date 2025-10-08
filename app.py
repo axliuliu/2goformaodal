@@ -7,36 +7,35 @@ import shutil
 import requests
 import platform
 import subprocess
-import threading
-from threading import Thread
-# 导入 Flask 作为 Web 框架
+import threading # <-- 关键修复：确保 threading 模块被导入和使用
+from threading import Thread 
 from flask import Flask, Response, abort 
 
 # 实例化 Flask 应用
 app = Flask(__name__)
 
-# --- Environment Variables ---
-UPLOAD_URL = os.environ.get('UPLOAD_URL', '')        # 节点或订阅上传地址
-PROJECT_URL = os.environ.get('PROJECT_URL', '')      # 项目url
+# --- 环境变量 ---
+UPLOAD_URL = os.environ.get('UPLOAD_URL', '')      
+PROJECT_URL = os.environ.get('PROJECT_URL', '')    
 AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() == 'false'
-FILE_PATH = os.environ.get('FILE_PATH', './.cache')  # 运行路径,sub.txt保存路径
-SUB_PATH = os.environ.get('SUB_PATH', 'sub')         # 订阅token
+FILE_PATH = os.environ.get('FILE_PATH', './.cache') 
+SUB_PATH = os.environ.get('SUB_PATH', 'sub')        
 UUID = os.environ.get('UUID', '7ef14791-3877-4524-a3e7-a320ee2dc048')
 NEZHA_SERVER = os.environ.get('NEZHA_SERVER', 'a.holoy.dpdns.org:36958')
-NEZHA_PORT = os.environ.get('NEZHA_PORT', '')        # v1哪吒请留空
+NEZHA_PORT = os.environ.get('NEZHA_PORT', '')      
 NEZHA_KEY = os.environ.get('NEZHA_KEY', 'NwxKJwM9UKRCX5TBPaBm0IrjNCSyflif')
-ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', 'modal.holoy.qzz.io')      # Argo固定隧道域名
+ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', 'modal.holoy.qzz.io')
 ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiwicyI6IllqZGpZelkxWWpjdE56WmlaQzAwTVRGaUxUazFNR010T1dRMU1tWmpPV1U1TmpNMSJ9')
-ARGO_PORT = int(os.environ.get('ARGO_PORT', '8000')) # Modal 推荐 8000 端口
+ARGO_PORT = int(os.environ.get('ARGO_PORT', '8000'))
 CFIP = os.environ.get('CFIP', 'www.visa.com.tw')
 CFPORT = int(os.environ.get('CFPORT', '443'))
 NAME = os.environ.get('NAME', 'modal.com')
 CHAT_ID = os.environ.get('CHAT_ID', '7627328147')
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '8337759907:AAGvmCiBeS2G_RXiNEUHYa4cdxn119nzV44')
 SERVER_PORT = int(os.environ.get('SERVER_PORT') or os.environ.get('PORT') or 8000) 
-# --- END Environment Variables ---
+# --- 环境变量结束 ---
 
-# Global file paths (使用全局变量，方便线程访问)
+# 全局文件路径
 npm_path = os.path.join(FILE_PATH, 'npm')
 php_path = os.path.join(FILE_PATH, 'php')
 web_path = os.path.join(FILE_PATH, 'web')
@@ -46,10 +45,9 @@ list_path = os.path.join(FILE_PATH, 'list.txt')
 boot_log_path = os.path.join(FILE_PATH, 'boot.log')
 config_path = os.path.join(FILE_PATH, 'config.json')
 
-# --- Utility Functions ---
+# --- 辅助函数 ---
 
 def create_directory():
-    # print('\033c', end='') # Modal log 中可能不支持清屏
     if not os.path.exists(FILE_PATH):
         os.makedirs(FILE_PATH)
         print(f"Directory {FILE_PATH} created.")
@@ -57,9 +55,8 @@ def create_directory():
         print(f"Directory {FILE_PATH} already exists.")
 
 def exec_cmd(command):
-    """Executes a command using Popen for non-blocking start, necessary for Modal."""
+    """使用 Popen 启动命令，非阻塞，适用于 Modal."""
     try:
-        # Popen starts the process and returns immediately, crucial for FaaS environments
         subprocess.Popen(
             command,
             shell=True,
@@ -73,31 +70,24 @@ def exec_cmd(command):
         return False
 
 def run_blocking_cmd(command):
-    """Executes a command using blocking subprocess.run, suitable for Cloudflare Tunnel as main process."""
+    """使用阻塞的 subprocess.run 运行命令，适用于 Cloudflare Tunnel."""
     try:
-        # subprocess.run blocks and waits for completion
         subprocess.run(command, shell=True, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Blocking command failed: {e}")
     except Exception as e:
         print(f"Error running blocking command: {e}")
 
-# ... [其他辅助函数，如 delete_nodes, cleanup_old_files, get_system_architecture, download_file, get_files_for_architecture, authorize_files, argo_type, upload_nodes, send_telegram 保持不变，但移除了 async 关键字] ...
-
 def delete_nodes():
     try:
         if not UPLOAD_URL or not os.path.exists(sub_path):
             return
-
         with open(sub_path, 'r') as file:
             file_content = file.read()
-
         decoded = base64.b64decode(file_content).decode('utf-8')
         nodes = [line for line in decoded.split('\n') if any(protocol in line for protocol in ['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://'])]
-
         if not nodes:
             return
-
         requests.post(f"{UPLOAD_URL}/api/delete-nodes",  
                       data=json.dumps({"nodes": nodes}),
                       headers={"Content-Type": "application/json"})
@@ -129,11 +119,9 @@ def download_file(file_name, file_url):
     try:
         response = requests.get(file_url, stream=True)
         response.raise_for_status()
-        
         with open(file_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-        
         print(f"Download {file_name} successfully")
         return True
     except Exception as e:
@@ -153,7 +141,6 @@ def get_files_for_architecture(architecture):
             {"fileName": "web", "fileUrl": "https://amd64.ssss.nyc.mn/web"},
             {"fileName": "bot", "fileUrl": "https://amd64.ssss.nyc.mn/2go"}
         ]
-
     if NEZHA_SERVER and NEZHA_KEY:
         if NEZHA_PORT:
             npm_url = "https://arm64.ssss.nyc.mn/agent" if architecture == 'arm' else "https://amd64.ssss.nyc.mn/agent"
@@ -161,7 +148,6 @@ def get_files_for_architecture(architecture):
         else:
             php_url = "https://arm64.ssss.nyc.mn/v1" if architecture == 'arm' else "https://amd64.ssss.nyc.mn/v1"
             base_files.insert(0, {"fileName": "php", "fileUrl": php_url})
-
     return base_files
 
 def authorize_files(file_paths):
@@ -178,7 +164,6 @@ def argo_type():
     if not ARGO_AUTH or not ARGO_DOMAIN:
         print("ARGO_DOMAIN or ARGO_AUTH variable is empty, use quick tunnels")
         return
-
     if "TunnelSecret" in ARGO_AUTH:
         try:
             auth_data = json.loads(ARGO_AUTH)
@@ -186,10 +171,8 @@ def argo_type():
         except json.JSONDecodeError:
             print("ARGO_AUTH is not valid JSON, cannot set up fixed tunnel.")
             return
-
         with open(os.path.join(FILE_PATH, 'tunnel.json'), 'w') as f:
             f.write(ARGO_AUTH)
-        
         tunnel_yml = f"""
 tunnel: {tunnel_id}
 credentials-file: {os.path.join(FILE_PATH, 'tunnel.json')}
@@ -212,7 +195,6 @@ def upload_nodes():
     if UPLOAD_URL and PROJECT_URL:
         subscription_url = f"{PROJECT_URL}/{SUB_PATH}"
         json_data = {"subscription": [subscription_url]}
-        
         try:
             requests.post(f"{UPLOAD_URL}/api/add-subscriptions", json=json_data, headers={"Content-Type": "application/json"})
             print('Subscription uploaded successfully')
@@ -222,17 +204,12 @@ def upload_nodes():
     elif UPLOAD_URL:
         if not os.path.exists(list_path):
             return
-        
         with open(list_path, 'r') as f:
             content = f.read()
-        
         nodes = [line for line in content.split('\n') if any(protocol in line for protocol in ['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://'])]
-        
         if not nodes:
             return
-        
         json_data = json.dumps({"nodes": nodes})
-        
         try:
             requests.post(f"{UPLOAD_URL}/api/add-nodes", data=json_data, headers={"Content-Type": "application/json"})
             print('Nodes uploaded successfully')
@@ -242,22 +219,16 @@ def upload_nodes():
 def send_telegram():
     if not BOT_TOKEN or not CHAT_ID or not os.path.exists(sub_path):
         return
-    
     try:
         with open(sub_path, 'r') as f:
             message = f.read()
-        
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        
-        # MarkdownV2 requires escaping special characters
         escaped_name = re.sub(r'([_*\[\]()~>#+=|{}.!\-])', r'\\\1', NAME)
-        
         params = {
             "chat_id": CHAT_ID,
             "text": f"**{escaped_name}节点推送通知**\n{message}",
             "parse_mode": "MarkdownV2"
         }
-        
         requests.post(url, params=params)
         print('Telegram message sent successfully')
     except Exception as e:
@@ -267,9 +238,8 @@ def add_visit_task():
     if not AUTO_ACCESS or not PROJECT_URL:
         print("Skipping adding automatic access task")
         return
-    
     try:
-        response = requests.post(
+        requests.post(
             'https://keep.gvrander.eu.org/add-url',
             json={"url": PROJECT_URL},
             headers={"Content-Type": "application/json"}
@@ -279,22 +249,19 @@ def add_visit_task():
         print(f'Failed to add URL: {e}')
 
 def generate_links(argo_domain):
-    # Use blocking subprocess.run for curl
     meta_info = subprocess.run(['curl', '-s', 'https://speed.cloudflare.com/meta'], capture_output=True, text=True)
     meta_info_stdout = meta_info.stdout
-    
     ISP = "UNKNOWN_LOCATION"
     if meta_info_stdout and meta_info.returncode == 0:
         try:
             meta_info_json = json.loads(meta_info_stdout)
             ISP = f"{meta_info_json.get('asn', '')}-{meta_info_json.get('colo', '')}".replace(' ', '_').strip()
         except Exception:
-            pass # Use UNKNOWN_LOCATION
+            pass
             
     time.sleep(2)
     VMESS = {"v": "2", "ps": f"{NAME}-{ISP}", "add": CFIP, "port": CFPORT, "id": UUID, "aid": "0", "scy": "none", "net": "ws", "type": "none", "host": argo_domain, "path": "/vmess-argo?ed=2560", "tls": "tls", "sni": argo_domain, "alpn": "", "fp": "chrome"}
     
-    # Generate list_txt
     list_txt = f"""
 vless://{UUID}@{CFIP}:{CFPORT}?encryption=none&security=tls&sni={argo_domain}&fp=chrome&type=ws&host={argo_domain}&path=%2Fvless-argo%3Fed%3D2560#{NAME}-{ISP}
  
@@ -320,7 +287,6 @@ trojan://{UUID}@{CFIP}:{CFPORT}?security=tls&sni={argo_domain}&fp=chrome&type=ws
 
 def extract_domains():
     argo_domain = None
-
     if ARGO_AUTH and ARGO_DOMAIN:
         argo_domain = ARGO_DOMAIN
         print(f'ARGO_DOMAIN: {argo_domain}')
@@ -328,12 +294,11 @@ def extract_domains():
         return
 
     # Check for temporary tunnel domain in log
-    for attempt in range(3): # Try up to 3 times
-        time.sleep(2 + attempt * 2) # Wait a bit longer each time
+    for attempt in range(3):
+        time.sleep(2 + attempt * 2)
         try:
             with open(boot_log_path, 'r') as f:
                 file_content = f.read()
-                
             match = re.search(r'https?://([^ ]*trycloudflare\.com)/?', file_content)
             if match:
                 argo_domain = match.group(1)
@@ -342,14 +307,13 @@ def extract_domains():
                 return
             
             print(f'ArgoDomain not found in log (Attempt {attempt+1}), retrying...')
-            # Attempt to restart the bot process if domain wasn't found on the first try
             if attempt < 2:
                 run_blocking_cmd('pkill -f "[b]ot"')
                 if os.path.exists(boot_log_path):
                      os.remove(boot_log_path)
                 
                 args = f"tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {boot_log_path} --loglevel info --url http://localhost:{ARGO_PORT}"
-                exec_cmd(f"{bot_path} {args}") # Restart non-blocking
+                exec_cmd(f"{bot_path} {args}")
                 
         except Exception as e:
             print(f'Error reading boot.log: {e}')
@@ -396,15 +360,12 @@ def run_argo_thread():
         print("Cloudflare Tunnel binary 'bot' not found. Cannot start tunnel.")
         return
         
-    # Get initial ARGO args for the blocking run
     if ARGO_AUTH and ARGO_DOMAIN and ("TunnelSecret" in ARGO_AUTH or re.match(r'^[A-Z0-9a-z=]{120,250}$', ARGO_AUTH)):
-        # Fixed tunnel run (run based on config or token)
         if "TunnelSecret" in ARGO_AUTH:
             args = f"tunnel --edge-ip-version auto --config {os.path.join(FILE_PATH, 'tunnel.yml')} run"
-        else: # Token based
+        else:
             args = f"tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token {ARGO_AUTH}"
     else:
-        # Temporary tunnel run (logs domain to boot.log)
         args = f"tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {boot_log_path} --loglevel info --url http://localhost:{ARGO_PORT}"
         
     command = f"{bot_path} {args}"
@@ -437,7 +398,7 @@ def sub_route():
 
 def clean_files():
     def _cleanup():
-        time.sleep(90) # Wait 90 seconds
+        time.sleep(90)
         cleanup_old_files()
         
         print('\033c', end='')
@@ -447,15 +408,15 @@ def clean_files():
     threading.Thread(target=_cleanup, daemon=True).start()
 
 def setup_and_run():
-    """Performs all setup, launches background services, and runs the ARGO tunnel as the main process."""
+    """执行所有设置，启动后台服务，并运行 ARGO 隧道作为主进程。"""
     
-    # Setup steps (Synchronous)
+    # 设置步骤 (同步)
     delete_nodes()
     cleanup_old_files()
     create_directory()
     argo_type()
     
-    # Download files (Synchronous)
+    # 下载文件 (同步)
     architecture = get_system_architecture()
     files_to_download = get_files_for_architecture(architecture)
     
@@ -466,34 +427,34 @@ def setup_and_run():
     files_to_authorize = [f["fileName"] for f in files_to_download]
     authorize_files(files_to_authorize)
 
-    # Launch non-essential services as separate threads (will be killed by Modal)
+    # 启动非关键服务作为单独线程 (会被 Modal 杀死)
     Thread(target=run_nezha_thread, daemon=True).start()
     Thread(target=run_web_thread, daemon=True).start()
     
-    # Wait for Xray/SingBox to start and config file to be available
+    # 等待 Xray/SingBox 启动和配置文件可用
     time.sleep(5) 
     
-    # Extract domains and generate sub.txt
+    # 提取域名并生成 sub.txt
     extract_domains()
     
-    # Add auto-access task
+    # 添加自保活任务
     add_visit_task()
     
-    # Start cleanup timer
+    # 启动清理定时器
     clean_files()
     
-    # Start the Flask server in a separate thread (must listen on ARGO_PORT)
+    # 启动 Flask 服务器作为单独线程 (必须监听 ARGO_PORT)
     Thread(target=lambda: app.run(host='0.0.0.0', port=ARGO_PORT, debug=False, use_reloader=False), daemon=True).start()
     
-    # Give Flask a moment to start
+    # 给 Flask 一点时间启动
     time.sleep(1)
 
-    # Launch Cloudflare Tunnel as the main blocking process
+    # 启动 Cloudflare Tunnel 作为主阻塞进程
     run_argo_thread()
 
 
 # ----------------------------------------------------------------------
-# FINAL EXECUTION BLOCK (Modal Compatible)
+# 最终执行块 (Modal 兼容)
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
