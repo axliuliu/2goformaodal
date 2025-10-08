@@ -25,7 +25,7 @@ ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGV
 ARGO_PORT = int(os.environ.get('ARGO_PORT', 8001))                          # Argo端口，固定隧道token请改回8080或在cf后台设置的端口与这里对应
 CFIP = os.environ.get('CFIP', 'www.visa.com.tw')                            # 优选域名或优选ip
 CFPORT = int(os.environ.get('CFPORT', 443))                                 # 优选域名或优选ip对应端口
-NAME = os.environ.get('NAME', 'modal1')                                        # 节点名称
+NAME = os.environ.get('NAME', 'modal')                                        # 节点名称
 
 # Create directory if it doesn't exist
 if not os.path.exists(FILE_PATH):
