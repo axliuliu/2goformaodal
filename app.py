@@ -24,7 +24,7 @@ NEZHA_SERVER = os.environ.get('NEZHA_SERVER', 'a.holoy.dpdns.org:36958')
 NEZHA_PORT = os.environ.get('NEZHA_PORT', '') 		
 NEZHA_KEY = os.environ.get('NEZHA_KEY', 'NwxKJwM9UKRCX5TBPaBm0IrjNCSyflif') 		
 ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', 'modal.holoy.qzz.io') 		
-ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiw MzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiwicyI6IllqZGpZelkxWWpjdE56WmlaQzAwTVRGaUxUazFNR010T1dRMU1tWmpPV1U1TmpNMSJ9') 		
+ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiwicyI6IllqZGpZelkxWWpjdE56WmlaQzAwTVRGaUxUazFNR010T1dRMU1tWmpPV1U1TmpNMSJ9') 		
 ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001')) 	
 CFIP = os.environ.get('CFIP', 'www.visa.com.tw') 		
 CFPORT = int(os.environ.get('CFPORT', '443')) 		
@@ -219,7 +219,7 @@ def exec_cmd(command):
         subprocess.Popen(
             command, 
             shell=True,
-            # DO NOT capture stdout/stderr, let them flow to Modal's log output
+            # Output will flow to Modal logs
         )
         return "Command started in background."
     except Exception as e:
@@ -335,7 +335,6 @@ uuid: {UUID}"""
         elif "TunnelSecret" in ARGO_AUTH:
             args = f"tunnel --edge-ip-version auto --config {os.path.join(FILE_PATH, 'tunnel.yml')} run"
         else:
-            # MODIFIED: Changed logging to file to loglevel info, for troubleshooting domain extraction
             args = f"tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {os.path.join(FILE_PATH, 'boot.log')} --loglevel info --url http://localhost:{ARGO_PORT}"
         
         try:
@@ -361,7 +360,6 @@ async def extract_domains():
         await generate_links(argo_domain)
     else:
         try:
-            # Wait for boot.log to be created/written
             await asyncio.sleep(2) 
             
             with open(boot_log_path, 'r') as f:
@@ -387,7 +385,6 @@ async def extract_domains():
                     os.remove(boot_log_path)
                 
                 try:
-                    # Removed redundant log redirection
                     exec_cmd('pkill -f "[b]ot"')
                 except:
                     pass
@@ -395,7 +392,7 @@ async def extract_domains():
                 time.sleep(1)
                 args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_PORT}'
                 # MODIFIED: Removed log redirection
-                exec_cmd(f'nohup {os.path.join(FILE_PATH, "bot")} {args} &')
+                exec_cmd(f"nohup {os.path.join(FILE_PATH, 'bot')} {args} &")
                 print('bot is running.')
                 time.sleep(6) 
                 await extract_domains() 
@@ -601,8 +598,9 @@ if __name__ == "__main__":
     server_thread.start()
     
     # 3. Keep the main thread alive by waiting for the server thread
+    print("Main process is waiting for the HTTP server thread...")
     try:
-        while server_thread.is_alive():
-            time.sleep(1)
+        # Use .join() to block the main thread, ensuring Modal keeps the container alive.
+        server_thread.join() 
     except KeyboardInterrupt:
         print("Shutting down...")
