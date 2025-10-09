@@ -1,50 +1,49 @@
 import modal
-import subprocess
 import sys
 import os
 
 app = modal.App(name="persistent-app-v2")
 
+# Define the image with necessary system packages (curl) 
+# and Python dependencies from requirements.txt.
 image = (
     modal.Image.debian_slim()
     .apt_install("curl")
     .pip_install_from_requirements("requirements.txt")
+    # Add the local directory (which contains app.py) to the remote workspace
     .add_local_dir(".", remote_path="/workspace")
 )
 
+# MODIFIED: Use a function structure that supports long-running service.
+# Set a very long timeout (e.g., 1 year) and keep_warm to simulate persistence.
 @app.function(
     image=image,
-    timeout=86400
+    timeout=86400 * 365,
+    keep_warm=1,
+    allow_concurrent_runs=1,
 )
-def run_app():
+def run_app_service():
     os.chdir("/workspace")
-    print("🟢 Starting app.py...")
+    print("🟢 Launching app.py as the main service process...")
 
-    process = subprocess.Popen(
-        [sys.executable, "app.py"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        universal_newlines=True
-    )
+    # MODIFIED: Use os.execle() to replace the current Python process 
+    # with the app.py script. This is the simplest and most reliable way
+    # to ensure all app.py output (including background services) 
+    # flows directly into Modal logs.
+    try:
+        os.execle(sys.executable, sys.executable, "app.py", os.environ)
+    except Exception as e:
+        print(f"🔴 Failed to execute app.py: {e}")
+        # Terminate the container if the main script fails to launch
+        sys.exit(1)
 
-    while True:
-        output = process.stdout.readline()
-        if output == '' and process.poll() is not None:
-            break
-        if output:
-            print(output.strip())
 
-    if process.returncode != 0:
-        error = process.stderr.read()
-        print(f"🔴 Process failed with code {process.returncode}: {error}")
-        raise modal.exception.ExecutionError("Script execution failed")
-
+# --- Deployment Logic ---
 if __name__ == "__main__":
-    print("🚀 Deploying application...")
-    app.deploy()  # ✅ 修复点：不要加参数
-
-    print("⚙️ Launching remote run...")
-    run_app.spawn()  # ✅ 异步执行函数
+    print("🚀 Deploying Persistent Service...")
+    
+    # MODIFIED: Use app.serve() to deploy a long-running service 
+    # instead of app.deploy() and run_app.spawn().
+    app.serve() 
+    
     print("✅ Deployment and remote launch complete.")
