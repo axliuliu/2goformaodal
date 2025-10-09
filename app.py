@@ -11,26 +11,27 @@ import subprocess
 import threading
 from threading import Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import nest_asyncio
 
 # Environment variables
-UPLOAD_URL = os.environ.get('UPLOAD_URL', '') 		# 节点或订阅上传地址,只填写这个地址将上传节点,同时填写PROJECT_URL将上传订阅，例如：https://merge.serv00.net
-PROJECT_URL = os.environ.get('PROJECT_URL', '') 	# 项目url,需要自动保活或自动上传订阅需要填写,例如：https://www.google.com,
-AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() != 'false' 	# false关闭自动保活, true开启自动保活，默认关闭
-FILE_PATH = os.environ.get('FILE_PATH', './.cache') 	# 运行路径,sub.txt保存路径
-SUB_PATH = os.environ.get('SUB_PATH', 'sub') 		# 订阅token,默认sub，例如：https://www.google.com/sub
-UUID = os.environ.get('UUID', '7ef14791-3877-4524-a3e7-a320ee2dc048') 	# UUID,如使用哪吒v1,在不同的平台部署需要修改,否则会覆盖
-NEZHA_SERVER = os.environ.get('NEZHA_SERVER', 'a.holoy.dpdns.org:36958') 	# 哪吒面板域名或ip, v1格式: nezha.xxx.com:8008, v0格式: nezha.xxx.com
-NEZHA_PORT = os.environ.get('NEZHA_PORT', '') 		# v1哪吒请留空, v0哪吒的agent通信端口,自动匹配tls
-NEZHA_KEY = os.environ.get('NEZHA_KEY', 'NwxKJwM9UKRCX5TBPaBm0IrjNCSyflif') 		# v1哪吒的NZ_CLIENT_SECRET或v0哪吒agent密钥
-ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', 'modal.holoy.qzz.io') 		# Argo固定隧道域名,留空即使用临时隧道
-ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiwicyI6IllqZGpZelkxWWpjdE56WmlaQzAwTVRGaUxUazFNR010T1dRMU1tWmpPV1U1TmpNMSJ9') 		# Argo固定隧道密钥,留空即使用临时隧道
-ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001')) 	# Argo端口,使用固定隧道token需在cloudflare后台设置端口和这里一致
-CFIP = os.environ.get('CFIP', 'www.visa.com.tw') 		# 优选ip或优选域名
-CFPORT = int(os.environ.get('CFPORT', '443')) 		# 优选ip或优选域名对应端口
-NAME = os.environ.get('NAME', 'modal.com') 					# 节点名称
-CHAT_ID = os.environ.get('CHAT_ID', '7627328147') 			# Telegram chat_id,推送节点到tg,两个变量同时填写才会推送
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8337759907:AAGvmCiBeS2G_RXiNEUHYa4cdxn119nzV44') 			# Telegram bot_token
-PORT = int(os.environ.get('SERVER_PORT') or os.environ.get('PORT') or 3000) # 订阅端口，如无法订阅，请手动修改为分配的端口
+UPLOAD_URL = os.environ.get('UPLOAD_URL', '') 		
+PROJECT_URL = os.environ.get('PROJECT_URL', '') 	
+AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() != 'false' 	
+FILE_PATH = os.environ.get('FILE_PATH', './.cache') 	
+SUB_PATH = os.environ.get('SUB_PATH', 'sub') 		
+UUID = os.environ.get('UUID', '7ef14791-3877-4524-a3e7-a320ee2dc048') 	
+NEZHA_SERVER = os.environ.get('NEZHA_SERVER', 'a.holoy.dpdns.org:36958') 	
+NEZHA_PORT = os.environ.get('NEZHA_PORT', '') 		
+NEZHA_KEY = os.environ.get('NEZHA_KEY', 'NwxKJwM9UKRCX5TBPaBm0IrjNCSyflif') 		
+ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', 'modal.holoy.qzz.io') 		
+ARGO_AUTH = os.environ.get('ARGO_AUTH', 'eyJhIjoiYjNiMmRhZjE1YjIzYmQ2ZmIzNzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiw MzZlNGViYTRhYzczYTEiLCJ0IjoiNWYwMjQ1MjItNjE1My00NTc3LThkMjgtODU4NjViZTQ1MThhIiwicyI6IllqZGpZelkxWWpjdE56WmlaQzAwTVRGaUxUazFNR010T1dRMU1tWmpPV1U1TmpNMSJ9') 		
+ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001')) 	
+CFIP = os.environ.get('CFIP', 'www.visa.com.tw') 		
+CFPORT = int(os.environ.get('CFPORT', '443')) 		
+NAME = os.environ.get('NAME', 'modal.com') 					
+CHAT_ID = os.environ.get('CHAT_ID', '7627328147') 			
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8337759907:AAGvmCiBeS2G_RXiNEUHYa4cdxn119nzV44') 			
+PORT = int(os.environ.get('SERVER_PORT') or os.environ.get('PORT') or 3000) 
 
 # Create running folder
 def create_directory():
@@ -212,17 +213,15 @@ ingress:
         print("Use token connect to tunnel,please set the {ARGO_PORT} in cloudflare")
 
 # Execute shell command and return output
+# MODIFIED: Simplified to non-blocking Popen without capturing output, allowing logs to flow to Modal stdout.
 def exec_cmd(command):
     try:
-        process = subprocess.Popen(
+        subprocess.Popen(
             command, 
             shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            # DO NOT capture stdout/stderr, let them flow to Modal's log output
         )
-        stdout, stderr = process.communicate()
-        return stdout + stderr
+        return "Command started in background."
     except Exception as e:
         print(f"Error executing command: {e}")
         return str(e)
@@ -296,7 +295,8 @@ uuid: {UUID}"""
     if NEZHA_SERVER and NEZHA_PORT and NEZHA_KEY:
         tls_ports = ['443', '8443', '2096', '2087', '2083', '2053']
         nezha_tls = '--tls' if NEZHA_PORT in tls_ports else ''
-        command = f"nohup {os.path.join(FILE_PATH, 'npm')} -s {NEZHA_SERVER}:{NEZHA_PORT} -p {NEZHA_KEY} {nezha_tls} >/dev/null 2>&1 &"
+        # MODIFIED: Removed >/dev/null 2>&1
+        command = f"nohup {os.path.join(FILE_PATH, 'npm')} -s {NEZHA_SERVER}:{NEZHA_PORT} -p {NEZHA_KEY} {nezha_tls} &"
         
         try:
             exec_cmd(command)
@@ -307,7 +307,8 @@ uuid: {UUID}"""
     
     elif NEZHA_SERVER and NEZHA_KEY:
         # Run V1
-        command = f"nohup {FILE_PATH}/php -c \"{FILE_PATH}/config.yaml\" >/dev/null 2>&1 &"
+        # MODIFIED: Removed >/dev/null 2>&1
+        command = f"nohup {FILE_PATH}/php -c \"{FILE_PATH}/config.yaml\" &"
         try:
             exec_cmd(command)
             print('php is running')
@@ -318,7 +319,8 @@ uuid: {UUID}"""
         print('NEZHA variable is empty, skipping running')
     
     # Run sbX
-    command = f"nohup {os.path.join(FILE_PATH, 'web')} -c {os.path.join(FILE_PATH, 'config.json')} >/dev/null 2>&1 &"
+    # MODIFIED: Removed >/dev/null 2>&1
+    command = f"nohup {os.path.join(FILE_PATH, 'web')} -c {os.path.join(FILE_PATH, 'config.json')} &"
     try:
         exec_cmd(command)
         print('web is running')
@@ -333,10 +335,12 @@ uuid: {UUID}"""
         elif "TunnelSecret" in ARGO_AUTH:
             args = f"tunnel --edge-ip-version auto --config {os.path.join(FILE_PATH, 'tunnel.yml')} run"
         else:
+            # MODIFIED: Changed logging to file to loglevel info, for troubleshooting domain extraction
             args = f"tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {os.path.join(FILE_PATH, 'boot.log')} --loglevel info --url http://localhost:{ARGO_PORT}"
         
         try:
-            exec_cmd(f"nohup {os.path.join(FILE_PATH, 'bot')} {args} >/dev/null 2>&1 &")
+            # MODIFIED: Removed >/dev/null 2>&1 from bot launch
+            exec_cmd(f"nohup {os.path.join(FILE_PATH, 'bot')} {args} &")
             print('bot is running')
             time.sleep(2)
         except Exception as e:
@@ -357,6 +361,9 @@ async def extract_domains():
         await generate_links(argo_domain)
     else:
         try:
+            # Wait for boot.log to be created/written
+            await asyncio.sleep(2) 
+            
             with open(boot_log_path, 'r') as f:
                 file_content = f.read()
             
@@ -380,16 +387,18 @@ async def extract_domains():
                     os.remove(boot_log_path)
                 
                 try:
-                    exec_cmd('pkill -f "[b]ot" > /dev/null 2>&1')
+                    # Removed redundant log redirection
+                    exec_cmd('pkill -f "[b]ot"')
                 except:
                     pass
                 
                 time.sleep(1)
                 args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_PORT}'
-                exec_cmd(f'nohup {os.path.join(FILE_PATH, "bot")} {args} >/dev/null 2>&1 &')
+                # MODIFIED: Removed log redirection
+                exec_cmd(f'nohup {os.path.join(FILE_PATH, "bot")} {args} &')
                 print('bot is running.')
-                time.sleep(6) # Wait 6 seconds
-                await extract_domains() # Try again
+                time.sleep(6) 
+                await extract_domains() 
         except Exception as e:
             print(f'Error reading boot.log: {e}')
 
@@ -444,7 +453,6 @@ def upload_nodes():
 # Send notification to Telegram
 def send_telegram():
     if not BOT_TOKEN or not CHAT_ID:
-        # print('TG variables is empty, Skipping push nodes to TG')
         return
     
     try:
@@ -519,10 +527,9 @@ def add_visit_task():
 # Clean up files after 90 seconds
 def clean_files():
     def _cleanup():
-        time.sleep(90) # Wait 90 seconds
+        time.sleep(90)
         files_to_delete = [boot_log_path, config_path, list_path, web_path, bot_path]
         
-        # 移除 tunnel.yml 和 tunnel.json, 如果存在的话
         if "TunnelSecret" in ARGO_AUTH:
             files_to_delete.extend([os.path.join(FILE_PATH, 'tunnel.yml'), os.path.join(FILE_PATH, 'tunnel.json')])
 
@@ -530,7 +537,6 @@ def clean_files():
             files_to_delete.append(npm_path)
         elif NEZHA_SERVER and NEZHA_KEY:
             files_to_delete.append(php_path)
-            # 移除 config.yaml, 如果存在的话
             files_to_delete.append(os.path.join(FILE_PATH, 'config.yaml'))
         
         for file in files_to_delete:
@@ -549,8 +555,8 @@ def clean_files():
     
     threading.Thread(target=_cleanup, daemon=True).start()
     
-# Main function to start the server
-async def start_server_async_task():
+# Main function (ASYNC entry point for configuration)
+async def start_server():
     delete_nodes()
     cleanup_old_files()
     create_directory()
@@ -558,7 +564,6 @@ async def start_server_async_task():
     await download_files_and_run()
     add_visit_task()
     
-    # 启动清理线程
     clean_files()
     
     print('Configuration and setup complete. Starting HTTP server...')
@@ -569,33 +574,35 @@ def run_server():
     print(f"Running done！")
     print(f"\nLogs will be delete in 90 seconds")
     try:
-        # 这是阻塞调用，会一直运行
         server.serve_forever()
     except KeyboardInterrupt:
         server.shutdown()
         
-def run_async():
-    # 运行异步任务 (配置、下载、启动其他后台进程)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_server_async_task())
-
-# --- 最终启动逻辑 ---
+# --- Main Logic ---
 
 if __name__ == "__main__":
-    # 1. 在主线程中运行异步配置任务
-    run_async()
     
-    # 2. 启动 HTTP 服务器的线程
+    # 1. Run async configuration tasks
+    try:
+        # Use asyncio.run() as the standard async entry point
+        asyncio.run(start_server())
+    except RuntimeError as e:
+        if "Cannot run the event loop while another loop is running" in str(e):
+            print("Modal environment already running an async loop, applying patch...")
+            # Apply nest_asyncio to allow re-running the loop in Modal/Jupyter environments
+            nest_asyncio.apply()
+            asyncio.run(start_server())
+        else:
+            raise e
+    
+    # 2. Start HTTP server thread to keep the container alive
     server_thread = Thread(target=run_server)
     server_thread.daemon = True
     server_thread.start()
     
-    # 3. 让主线程等待服务器线程完成。因为服务器是 serve_forever，主线程会保持存活
+    # 3. Keep the main thread alive by waiting for the server thread
     try:
-        # 使用一个简单的 sleep 循环来保持主线程存活，直到服务器线程被终止 (例如，在 Modal 中被外部终止)
         while server_thread.is_alive():
             time.sleep(1)
     except KeyboardInterrupt:
         print("Shutting down...")
-        # 清理工作（可选，因为 Modal 会终止所有进程）
